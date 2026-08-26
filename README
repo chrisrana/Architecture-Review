@@ -1,0 +1,1013 @@
+# How Do You Really Detect OS Coupling in Modern Applications?
+
+When architects talk about **OS coupling**, the conversation often starts with simple questions:
+
+> "Does this application run on Linux?"
+
+or:
+
+> "Is the application running on RHEL?"
+
+Those questions are too simplistic.
+
+Almost every modern enterprise application runs on some operating system. A Java application running inside a Linux container does not automatically mean the application is tightly coupled to Linux.
+
+The more important architectural question is:
+
+> **If we upgrade, replace, or change the underlying operating system, what part of the application will break or require modification?**
+
+That is the real definition of OS coupling.
+
+OS coupling is fundamentally a **change-impact problem**. Coupling becomes important when a change in one component can force changes elsewhere.
+
+And in modern enterprises, identifying it is becoming increasingly difficult because an "application" is no longer a single repository.
+
+It may consist of:
+
+* Microservices
+* Monoliths
+* Containers
+* Serverless functions
+* Batch jobs
+* Shared libraries
+* Data pipelines
+* Integration services
+* Infrastructure-as-Code
+* Deployment repositories
+* CI/CD pipelines
+* Vendor/COTS components
+* Legacy applications
+* Desktop or thick-client applications
+* Hybrid combinations of all of the above
+
+So how do we actually detect OS coupling?
+
+---
+
+# The Problem With Repository-Level Scanning
+
+Consider an application called **Payments Platform**.
+
+It might contain:
+
+```text
+Payments Platform
+│
+├── payment-api
+├── payment-engine
+├── payment-ui
+├── payment-batch
+├── payment-scheduler
+├── payment-shared-library
+├── payment-deployment
+├── payment-infrastructure
+└── payment-data-pipeline
+```
+
+These may be ten different repositories owned by multiple teams.
+
+Now imagine you scan only:
+
+```text
+payment-api
+```
+
+You find:
+
+```text
+Java 21
+Spring Boot
+Docker
+```
+
+Everything looks portable.
+
+You conclude:
+
+> OS coupling = Low
+
+But another repository might contain:
+
+```text
+payment-batch
+    └── systemctl
+    └── shell scripts
+    └── /etc/payment
+```
+
+And another:
+
+```text
+payment-shared-library
+    └── libssl.so.1.1
+```
+
+And another:
+
+```text
+payment-infrastructure
+    └── RHEL 8 AMI
+    └── yum install
+```
+
+And another:
+
+```text
+payment-deployment
+    └── systemd service
+```
+
+Now the actual application has significant OS coupling.
+
+This leads to an important principle:
+
+> **OS coupling cannot reliably be assessed at repository level. It must be assessed at application-component level and then aggregated across repositories, deployment units, and infrastructure.**
+
+---
+
+# Step 1: Define the Application Boundary
+
+Before scanning code, establish:
+
+> **What constitutes the application?**
+
+The architecture platform should create an **Application Inventory**.
+
+For example:
+
+| Component      | Repository        | Runtime      | Deployment     | Infrastructure |
+| -------------- | ----------------- | ------------ | -------------- | -------------- |
+| Payment API    | payment-api       | Java 21      | Container      | ECS            |
+| Payment Engine | payment-engine    | Python 3.12  | Container      | ECS            |
+| Payment Batch  | payment-batch     | Python/Shell | VM             | RHEL           |
+| Payment UI     | payment-ui        | Node.js      | Static hosting | Managed        |
+| Scheduler      | payment-scheduler | Java         | Container      | Kubernetes     |
+| Shared Library | payment-common    | C++          | Package        | Native         |
+| Infrastructure | payment-infra     | Terraform    | IaC            | AWS            |
+| Deployment     | payment-deploy    | Shell/YAML   | CI/CD          | Jenkins        |
+
+This becomes the foundation of the assessment.
+
+---
+
+# Step 2: Don't Assume One Application Has One Architecture Style
+
+A modern enterprise application may be:
+
+### Monolithic
+
+```text
+Application
+     ↓
+VM
+     ↓
+RHEL
+```
+
+### Microservices
+
+```text
+Application
+   │
+   ├── Service A
+   ├── Service B
+   ├── Service C
+   └── Service D
+```
+
+### Containerized
+
+```text
+Application
+     ↓
+Container
+     ↓
+Container Runtime
+     ↓
+Host OS
+```
+
+### Serverless
+
+```text
+Application
+     ↓
+Lambda / Function
+     ↓
+Managed Runtime
+```
+
+### Batch
+
+```text
+Scheduler
+    ↓
+Shell/Python/Java
+    ↓
+VM
+    ↓
+OS
+```
+
+### Data Pipeline
+
+```text
+Pipeline
+   ↓
+Spark/Python
+   ↓
+Runtime
+   ↓
+Managed Platform
+```
+
+### Legacy
+
+```text
+Application
+   ↓
+Application Server
+   ↓
+Specific OS
+   ↓
+Specific Hardware
+```
+
+### Hybrid
+
+And increasingly:
+
+```text
+                   Application
+                        │
+       ┌────────────────┼────────────────┐
+       ↓                ↓                ↓
+   Microservices       Batch          Serverless
+       ↓                ↓                ↓
+  Containers           VM            Managed Runtime
+       ↓                ↓                ↓
+     Linux            RHEL              Managed
+```
+
+The assessment engine must understand all of these.
+
+---
+
+# Step 3: Scan Seven Sources of Evidence
+
+OS coupling is not only in source code.
+
+I would inspect **seven evidence sources**.
+
+## 1. Application Source Code
+
+Search for direct OS interaction.
+
+Examples:
+
+```text
+system()
+exec()
+subprocess()
+Runtime.exec()
+ProcessBuilder
+shell=True
+PowerShell
+cmd.exe
+```
+
+Filesystem references:
+
+```text
+/etc
+/var
+/opt
+/usr
+/tmp
+
+C:\Windows
+C:\Program Files
+```
+
+OS APIs:
+
+```text
+Win32
+Windows Registry
+POSIX
+Linux system calls
+kernel APIs
+```
+
+These are strong indicators of OS coupling.
+
+---
+
+# 2. Dependency and Build Files
+
+The application may not directly call the OS, but one of its dependencies might.
+
+Inspect:
+
+```text
+pom.xml
+build.gradle
+package.json
+requirements.txt
+poetry.lock
+go.mod
+Cargo.toml
+.csproj
+```
+
+Look for:
+
+```text
+JNI
+native libraries
+DLL
+SO
+glibc
+OpenSSL
+libstdc++
+platform-specific packages
+```
+
+For example:
+
+```text
+Python
+   ↓
+Native package
+   ↓
+glibc
+   ↓
+Linux
+```
+
+The Python source code may look completely portable.
+
+The binary dependency may not be.
+
+Native dependencies are therefore an important source of hidden coupling.
+
+---
+
+# 3. Container Definitions
+
+For containerized applications, inspect:
+
+```text
+Dockerfile
+Containerfile
+Helm
+Kubernetes manifests
+ECS task definitions
+```
+
+For example:
+
+```dockerfile
+FROM rhel:8
+
+RUN yum install openssl
+RUN yum install libaio
+
+COPY start.sh /app/
+
+ENTRYPOINT ["/bin/bash", "/app/start.sh"]
+```
+
+This provides several signals:
+
+```text
+RHEL 8
+yum
+OpenSSL
+libaio
+bash
+```
+
+But this is where architecture reasoning is important.
+
+Simply seeing:
+
+```text
+FROM ubuntu:24.04
+```
+
+does **not** mean high OS coupling.
+
+A container necessarily has a userspace environment.
+
+The question is:
+
+> **Does the application depend on OS-specific behavior beyond the normal container/runtime boundary?**
+
+Containers improve portability, but they do not provide absolute OS independence. The container image still has compatibility relationships with its host kernel and architecture.
+
+---
+
+# 4. Infrastructure-as-Code
+
+This is one of the most overlooked areas.
+
+Scan:
+
+```text
+Terraform
+CloudFormation
+CDK
+Ansible
+Packer
+Chef
+Puppet
+AMI definitions
+```
+
+For example:
+
+```terraform
+ami = "rhel-8-payment"
+```
+
+or:
+
+```text
+packages:
+  - openssl-1.1
+  - libaio
+```
+
+The application repository might have no evidence of OS coupling.
+
+But the infrastructure repository tells a different story.
+
+This is why **application architecture assessment cannot be limited to application source code**.
+
+---
+
+# 5. Deployment Scripts
+
+Look for:
+
+```text
+systemctl
+service
+chkconfig
+cron
+crontab
+/etc/init.d
+PowerShell
+Windows Service
+registry
+```
+
+For example:
+
+```bash
+systemctl restart payment-service
+```
+
+This indicates that the deployment lifecycle depends on systemd.
+
+However, there is an important distinction:
+
+> This may be **deployment OS coupling**, rather than **application-runtime OS coupling**.
+
+Your assessment should preserve that distinction.
+
+---
+
+# 6. CI/CD Pipelines
+
+Inspect:
+
+```text
+Jenkins
+GitHub Actions
+GitLab CI
+Azure DevOps
+Bamboo
+```
+
+Example:
+
+```yaml
+steps:
+  - run: yum install gcc
+  - run: ./build.sh
+  - run: systemctl restart application
+```
+
+You may discover that the application can theoretically run anywhere, but the **build and deployment process cannot**.
+
+That still matters.
+
+A production OS upgrade can fail because the deployment pipeline depends on the old OS.
+
+---
+
+# 7. Runtime and Infrastructure Metadata
+
+Finally, determine where the workload actually runs.
+
+For example:
+
+```text
+Payment API
+   ↓
+Container
+   ↓
+ECS
+   ↓
+EC2
+   ↓
+Amazon Linux
+```
+
+Or:
+
+```text
+Payment Batch
+   ↓
+EC2
+   ↓
+RHEL 8
+```
+
+Or:
+
+```text
+Payment Function
+   ↓
+Lambda
+   ↓
+Managed Runtime
+```
+
+This allows the architecture engine to connect **code evidence with runtime reality**.
+
+---
+
+# OS Dependency Is Not the Same as OS Coupling
+
+This distinction is critical.
+
+Consider:
+
+```text
+Java application
+      ↓
+Linux
+```
+
+There is an OS dependency.
+
+But it may have:
+
+**OS coupling = LOW**
+
+because the application can run unchanged across supported Linux distributions.
+
+Now consider:
+
+```text
+Java application
+      ↓
+systemctl
+      ↓
+Linux systemd
+```
+
+Now:
+
+**OS coupling = HIGH**
+
+because the application or its operational lifecycle depends on an OS-specific mechanism.
+
+---
+
+# Another Example: Containers
+
+Consider:
+
+```text
+Application
+    ↓
+Container
+    ↓
+Linux
+```
+
+This should not automatically receive a high OS-coupling score.
+
+But consider:
+
+```text
+Application
+    ↓
+Container
+    ↓
+hostPath
+    ↓
+/var/lib/...
+```
+
+or:
+
+```text
+privileged: true
+```
+
+or:
+
+```text
+host network
+```
+
+Now the application is interacting much more closely with the host environment.
+
+The coupling has increased.
+
+---
+
+# Another Example: Native Libraries
+
+Consider:
+
+```text
+Application
+      ↓
+Native library
+      ↓
+libssl.so.1.1
+      ↓
+OS
+```
+
+An OS upgrade could change the availability or ABI compatibility of that library.
+
+That is much stronger coupling than:
+
+```text
+Java
+   ↓
+JVM
+   ↓
+Linux
+```
+
+This is why the assessment must understand **dependency semantics**, not simply count OS-related strings.
+
+---
+
+# Build an Evidence Graph
+
+This is the model I would use for an AI architecture assessment platform.
+
+```text
+                     APPLICATION
+                          │
+                          ↓
+                  COMPONENT INVENTORY
+                          │
+          ┌───────────────┼───────────────┐
+          ↓               ↓               ↓
+       Repo A           Repo B          Repo C
+          │               │               │
+          ↓               ↓               ↓
+      Source         Dependencies      Dockerfile
+          │               │               │
+          └───────────────┼───────────────┘
+                          ↓
+                    EVIDENCE GRAPH
+                          │
+        ┌─────────────────┼─────────────────┐
+        ↓                 ↓                 ↓
+    OS API          Native Library      OS Command
+        │                 │                 │
+        └─────────────────┼─────────────────┘
+                          ↓
+                   COUPLING ENGINE
+                          ↓
+                   RISK ASSESSMENT
+```
+
+Now every finding has traceability:
+
+```text
+Risk
+ ↓
+Finding
+ ↓
+Repository
+ ↓
+File
+ ↓
+Line
+ ↓
+Evidence
+```
+
+This is much more useful to an architect than an AI-generated statement with no evidence.
+
+---
+
+# Don't Ask the LLM to Detect Everything
+
+This is particularly important if you're building an AI architecture assessment agent.
+
+I would use:
+
+```text
+Static Analysis
+       +
+Dependency Analysis
+       +
+Container Analysis
+       +
+IaC Analysis
+       +
+CI/CD Analysis
+       +
+Runtime Metadata
+       ↓
+Evidence
+       ↓
+LLM
+       ↓
+Architectural Reasoning
+```
+
+The deterministic tools find the evidence.
+
+The LLM interprets it.
+
+For example:
+
+### Deterministic scanner
+
+Finds:
+
+```text
+systemctl
+libssl.so.1.1
+RHEL 8 AMI
+/etc/payment/config
+```
+
+### AI reasoning
+
+Concludes:
+
+> The Payment Batch component has high OS coupling because its deployment depends on systemd, its runtime depends on a version-specific native OpenSSL library, and its infrastructure is pinned to RHEL 8. A RHEL 8 → RHEL 9 migration may therefore require changes to the deployment process and native dependency stack.
+
+That is where AI adds value.
+
+---
+
+# A Practical OS Coupling Classification
+
+I would define rules such as:
+
+| Evidence                             | Coupling       |
+| ------------------------------------ | -------------- |
+| Application runs on Linux            | 🟢 Low         |
+| Container has Linux base image       | 🟢 Low         |
+| Standard JVM/.NET/Python runtime     | 🟢 Low         |
+| OS-specific filesystem path          | 🟡 Medium      |
+| Shell command dependency             | 🟡 Medium      |
+| OS-specific package                  | 🟠 Medium/High |
+| systemd / Windows Service dependency | 🔴 High        |
+| Version-specific native library      | 🔴 High        |
+| OS-specific API                      | 🔴 High        |
+| Kernel module/API dependency         | 🔴 Critical    |
+| Direct host filesystem access        | 🔴 High        |
+| Privileged container                 | 🔴 High        |
+
+These should be **rules**, not LLM guesses.
+
+---
+
+# Then Ask the Most Important Question
+
+For every finding, your assessment engine should ask:
+
+> **"If the underlying OS is upgraded or replaced, can this component continue to operate without changing application code, dependencies, configuration, build, or deployment?"**
+
+If the answer is:
+
+### Yes
+
+```text
+OS Coupling = Low
+```
+
+### Possibly, but requires testing/configuration
+
+```text
+OS Coupling = Medium
+```
+
+### Application/deployment changes required
+
+```text
+OS Coupling = High
+```
+
+### Fundamental redesign or recompilation required
+
+```text
+OS Coupling = Critical
+```
+
+This is much more meaningful than simply counting OS references.
+
+---
+
+# Application-Level Assessment
+
+Now imagine the application has:
+
+```text
+Payment API          → LOW
+Payment Engine       → LOW
+Payment Batch        → HIGH
+Shared Library       → CRITICAL
+Deployment           → HIGH
+Infrastructure       → HIGH
+```
+
+Don't calculate a simple average.
+
+A critical dependency in a business-critical shared library may dominate the application-level risk.
+
+Instead evaluate:
+
+```text
+Severity
++
+Business Criticality
++
+Blast Radius
++
+Production Usage
++
+Replaceability
++
+Upgrade Impact
++
+Compatibility Testing
+```
+
+The final result might be:
+
+```text
+PAYMENTS PLATFORM
+
+OS COUPLING
+━━━━━━━━━━━━━━━━━━━━
+
+72 / 100
+HIGH
+```
+
+With:
+
+```text
+Top Findings
+
+1. RHEL 8 dependency in batch workload
+2. Version-specific OpenSSL native library
+3. systemd-based deployment
+4. OS-specific deployment scripts
+5. No evidence of target OS compatibility testing
+```
+
+---
+
+# The Architecture Target State
+
+The objective is not to eliminate all OS dependencies.
+
+That is neither realistic nor necessary.
+
+The goal is to **control where the dependency exists**.
+
+Instead of:
+
+```text
+Application
+     ↓
+OS-specific implementation
+     ↓
+Operating System
+```
+
+move toward:
+
+```text
+                 APPLICATION
+                      │
+                      ↓
+              PORT / INTERFACE
+                      │
+                      ↓
+             ADAPTER / RUNTIME
+                      │
+                      ↓
+              INFRASTRUCTURE
+                      │
+                      ↓
+                 OS / CLOUD
+```
+
+This is essentially the same architectural principle used in portable software design: keep platform-specific functionality isolated behind defined boundaries rather than spreading it throughout application logic.
+
+---
+
+# The Bigger Opportunity: Application Portability
+
+I would actually go one step further.
+
+Don't make **OS Coupling** a standalone architecture metric.
+
+Make it part of:
+
+# Application Portability & Infrastructure Coupling
+
+```text
+Application Portability
+│
+├── OS Coupling
+├── Runtime Coupling
+├── Database Coupling
+├── Cloud Coupling
+├── Infrastructure Coupling
+├── Vendor Coupling
+└── Platform Coupling
+```
+
+For example:
+
+```text
+APPLICATION PORTABILITY
+
+OS Coupling                  72 🔴
+Runtime Coupling             41 🟡
+Database Coupling            65 🟠
+Cloud Coupling               38 🟢
+Infrastructure Coupling      54 🟡
+Vendor Coupling              47 🟡
+
+Overall Portability          53 🟠
+```
+
+Now an architect can answer a much more valuable question:
+
+> **"How difficult would it be to change the underlying technology or infrastructure without breaking this application?"**
+
+That is a much broader and more strategic architecture question than simply:
+
+> "Does this application depend on Linux?"
+
+---
+
+# Final Thought
+
+Modern applications are no longer single codebases.
+
+They are ecosystems of:
+
+**Repositories → Components → Dependencies → Runtimes → Containers → Infrastructure → Operating Systems.**
+
+Therefore, OS coupling cannot be discovered by scanning a single repository.
+
+It requires a **multi-layer evidence model**.
+
+The architecture assessment should:
+
+```text
+Discover
+   ↓
+Classify
+   ↓
+Map
+   ↓
+Scan
+   ↓
+Correlate
+   ↓
+Reason
+   ↓
+Assess
+   ↓
+Recommend
+```
+
+And the most important question should always remain:
+
+> **"What will break if the OS changes?"**
+
+If your architecture agent can answer that question with **evidence, impact, blast radius, and remediation**, then you have moved beyond a simple compliance checker into a genuine **AI-powered architecture risk assessment capability**.
