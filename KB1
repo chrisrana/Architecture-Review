@@ -1,0 +1,2077 @@
+OS Coupling Assessment Knowledge Base
+
+KB ID: OS-COUPLING-001
+Version: 1.0
+Domain: Application Architecture
+Scope: Operating System Coupling
+
+1. Purpose
+
+Identify application dependencies on operating-system-specific behavior, configuration, APIs, commands, services, libraries, filesystem semantics, permissions, kernel behavior, devices, CPU architecture, or OS/runtime versions.
+
+The key question is:
+
+Could an OS upgrade, OS migration, kernel change, host-environment change, or CPU architecture change break the application?
+
+The assessment must identify:
+
+What the application depends on
+
+Where the dependency exists
+
+Which repository/component contains the dependency
+
+Who owns the dependency
+
+Whether the dependency is direct or indirect
+
+Whether it is host-level or container-internal
+
+Whether an OS change can break the application
+
+Severity and confidence
+
+Recommended remediation
+
+2. Application Types in Scope
+
+The assessment must support:
+
+Bare-metal applications
+
+VM-based applications
+
+Containerized applications
+
+Kubernetes applications
+
+ECS/container-platform applications
+
+Monolithic applications
+
+Microservices
+
+Serverless applications
+
+Batch applications
+
+Data-processing applications
+
+Legacy applications
+
+Desktop applications
+
+Vendor-packaged applications
+
+Hybrid applications
+
+Applications spanning multiple deployment models
+
+Do not assume that an application has only one repository or one execution model.
+
+3. Multi-Repository Assessment
+
+An application may contain multiple repositories.
+
+Example:
+
+Payment Application
+├── payment-api
+├── payment-batch
+├── payment-engine
+├── payment-container
+├── payment-deployment
+└── payment-infrastructure
+
+Assess the complete application landscape.
+
+Evidence may be distributed across repositories.
+
+Example:
+
+Repository A:
+
+Application code:
+open("/etc/payment/config")
+
+Repository B:
+
+hostPath:
+  path: /etc/payment
+
+The combination establishes:
+
+Application
+    ↓
+Container
+    ↓
+Host filesystem
+    ↓
+Host OS
+
+This is stronger evidence of OS coupling than either repository considered independently.
+
+4. Core Principle
+
+Never classify OS coupling solely because the application contains:
+
+/etc
+
+/var
+
+/opt
+
+/tmp
+
+Linux
+
+RHEL
+
+Ubuntu
+
+Windows
+
+Docker
+
+Kubernetes
+
+Java
+
+Python
+
+C++
+
+A container
+
+A filesystem path
+
+These are indicators, not conclusions.
+
+The agent must establish:
+
+Dependency
+    ↓
+Dependency Owner
+    ↓
+Execution Environment
+    ↓
+Architectural Boundary
+    ↓
+OS Specificity
+    ↓
+Change Impact
+    ↓
+Severity
+
+5. What Is OS Coupling?
+
+OS coupling exists when application behavior depends on OS-specific implementation or behavior.
+
+Examples include:
+
+OS-specific commands
+
+OS-specific APIs
+
+OS-specific filesystem behavior
+
+Host filesystem paths
+
+OS-managed services
+
+OS packages
+
+Native libraries
+
+ABI versions
+
+Kernel behavior
+
+Kernel modules
+
+OS security policies
+
+OS permissions
+
+Host devices
+
+CPU architecture
+
+OS-specific networking
+
+OS-specific process management
+
+Specific OS versions
+
+6. Direct vs Indirect OS Coupling
+
+Direct Coupling
+
+Application
+    ↓
+Host OS
+
+Examples:
+
+Application → systemctl
+Application → Windows Registry
+Application → /etc/systemd
+Application → Linux-specific API
+
+Indirect Coupling
+
+Application
+    ↓
+Container
+    ↓
+Host resource
+    ↓
+Host OS
+
+Examples:
+
+Application → hostPath → Host filesystem
+Application → hostNetwork → Host network namespace
+Application → /dev/device → Host device
+
+Both direct and indirect dependencies must be reported.
+
+7. Dependency Ownership
+
+For every finding, determine who owns the dependency:
+
+Application
+
+Application team
+
+Container image
+
+Host OS
+
+Platform
+
+Infrastructure
+
+Cloud provider
+
+Runtime provider
+
+Vendor
+
+Hardware platform
+
+This is especially important for containers.
+
+Example:
+
+Application
+    ↓
+/etc/myapp/config
+
+This does not by itself establish host OS coupling.
+
+It could be:
+
+Container-owned
+
+or:
+
+Host-owned
+
+or:
+
+Platform-managed
+
+The agent must determine which one applies.
+
+8. Container OS Coupling
+
+Containerization reduces exposure to the host OS userspace but does not eliminate OS coupling.
+
+Assess separately:
+
+Container userspace
+Host filesystem
+Host kernel
+Host network
+Host process namespace
+Host IPC
+Host devices
+Native libraries
+Container runtime
+
+Important rule:
+
+Containerized does not mean OS-independent.
+
+Also:
+
+Non-containerized does not automatically mean high OS coupling.
+
+9. Critical Container Decision Rule
+
+Case A — Container Internal Path
+
+Dockerfile:
+
+COPY config.yaml /etc/myapp/config.yaml
+
+Application:
+
+open("/etc/myapp/config.yaml")
+
+If the file exists only inside the container:
+
+Host OS Coupling = LOW
+
+The application is coupled to the container filesystem, not necessarily the host OS.
+
+Case B — Host Filesystem
+
+Kubernetes:
+
+volumes:
+  - name: config
+    hostPath:
+      path: /etc/myapp
+
+Application:
+
+/etc/myapp/config
+
+Result:
+
+Host OS Coupling = HIGH
+
+Reason:
+
+The application depends on the node's filesystem structure.
+
+Case C — ConfigMap
+
+volume:
+  configMap:
+    name: myapp-config
+
+Application:
+
+/etc/myapp/config
+
+Result:
+
+Host OS Coupling = LOW
+
+The path is container-visible, but configuration is platform-managed.
+
+10. Filesystem Coupling
+
+A filesystem dependency becomes OS coupling when it depends on host/OS-specific filesystem behavior or layout.
+
+Inspect:
+
+/etc
+/var
+/usr
+/opt
+/run
+/var/run
+/var/lib
+/proc
+/sys
+/dev
+/tmp
+/var/tmp
+
+Do not automatically report these paths as OS coupling.
+
+Determine:
+
+Path
+ |
+ +-- Container filesystem?
+ |
+ +-- Host filesystem?
+ |
+ +-- Managed volume?
+ |
+ +-- Application-created?
+ |
+ +-- OS-managed?
+
+11. Strong OS Filesystem Indicators
+
+The following generally require investigation:
+
+/proc
+/sys
+/dev
+/etc/systemd
+/etc/init.d
+/var/run
+/run
+
+Direct dependency on these locations is typically:
+
+HIGH
+
+or:
+
+CRITICAL
+
+depending on the use case.
+
+12. Temporary Files
+
+Usage of:
+
+/tmp
+/var/tmp
+%TEMP%
+%TMP%
+
+does not automatically indicate OS coupling.
+
+Typical classification:
+
+LOW
+
+Increase severity if the application assumes:
+
+Persistence across restart
+
+Host-level sharing
+
+Specific filesystem semantics
+
+Specific locking behavior
+
+Specific cleanup behavior
+
+Shared files between hosts
+
+13. Hardcoded Working Directory
+
+Example:
+
+open("./config/config.yaml")
+
+This creates environment sensitivity because different launch mechanisms may use different working directories.
+
+Possible environments:
+
+Docker
+
+Kubernetes
+
+ECS
+
+systemd
+
+cron
+
+Control-M
+
+Jenkins
+
+shell scripts
+
+Typical classification:
+
+LOW/MEDIUM
+
+Prefer explicit configuration:
+
+CONFIG_PATH=/config/config.yaml
+
+14. OS Command Coupling
+
+Detect application runtime invocation of OS commands.
+
+Linux Examples
+
+systemctl
+service
+journalctl
+mount
+umount
+iptables
+ip
+ifconfig
+route
+ss
+netstat
+lsblk
+lsof
+modprobe
+insmod
+rmmod
+sysctl
+chmod
+chown
+useradd
+groupadd
+apt
+apt-get
+yum
+dnf
+rpm
+
+Windows Examples
+
+cmd.exe
+powershell.exe
+sc.exe
+net.exe
+reg.exe
+diskpart
+wmic
+
+Example:
+
+subprocess.run(["systemctl", "restart", "myapp"])
+
+Typical classification:
+
+HIGH
+
+Important distinction:
+
+If the command exists only in deployment/provisioning scripts, classify the application coupling separately from infrastructure coupling.
+
+15. OS API Coupling
+
+Detect direct use of:
+
+Linux-specific APIs
+
+POSIX-only behavior
+
+Linux syscalls
+
+ioctl
+
+epoll
+
+inotify
+
+Linux-specific networking APIs
+
+Win32 APIs
+
+Windows Registry APIs
+
+Windows Service APIs
+
+Typical classification:
+
+MEDIUM/HIGH
+
+If the application cannot operate on another supported OS:
+
+HIGH
+
+16. Native Library Coupling
+
+Detect:
+
+.so
+.dll
+.dylib
+JNI
+ctypes
+cffi
+native extensions
+
+Examples:
+
+libssl.so
+libcrypto.so
+libaio.so
+vendor.dll
+
+Typical classification:
+
+MEDIUM/HIGH
+
+Increase severity when the dependency is:
+
+OS-specific
+
+CPU-architecture-specific
+
+ABI-specific
+
+Version-specific
+
+Unsupported
+
+Unmaintained
+
+17. ABI Coupling
+
+Detect dependencies on:
+
+glibc
+libstdc++
+OpenSSL ABI
+native JVM libraries
+.NET native dependencies
+
+Example:
+
+Application requires a specific glibc ABI.
+
+Typical classification:
+
+HIGH
+
+especially when an OS upgrade can change the ABI or native library compatibility.
+
+18. OS Package Coupling
+
+Inspect:
+
+apt
+apt-get
+yum
+dnf
+rpm
+apk
+
+Also inspect:
+
+RPM files
+
+DEB files
+
+Package manifests
+
+OS installation scripts
+
+Base images
+
+Example:
+
+Application requires a specific version of libssl.
+
+Typical classification:
+
+MEDIUM/HIGH
+
+If an OS upgrade can remove or replace the dependency:
+
+HIGH
+
+19. OS Version Coupling
+
+Detect explicit dependencies on:
+
+RHEL 7
+RHEL 8
+RHEL 9
+Ubuntu 20.04
+Ubuntu 22.04
+Windows Server 2019
+Windows Server 2022
+
+Example:
+
+Application requires RHEL 8 because native library X
+is not supported on RHEL 9.
+
+Classification:
+
+HIGH
+
+20. OS Service Coupling
+
+Detect:
+
+systemd
+
+init.d
+
+Windows Services
+
+OS service managers
+
+OS-specific daemon behavior
+
+Example:
+
+Application modifies:
+
+/etc/systemd/system/myapp.service
+
+Classification:
+
+HIGH
+
+Prefer:
+
+Application
+    ↓
+Health / Readiness Interface
+    ↓
+Deployment Platform
+
+rather than application code managing OS services.
+
+21. OS Logging Coupling
+
+Example:
+
+Application
+    ↓
+/var/log/messages
+
+If application reads or parses OS logs:
+
+HIGH
+
+Application-specific file:
+
+/var/log/myapp/app.log
+
+Typical classification:
+
+MEDIUM
+
+For containers prefer:
+
+Application
+    ↓
+stdout / stderr
+    ↓
+Central Logging Platform
+
+22. OS Permission Coupling
+
+Detect dependencies on:
+
+root
+UID
+GID
+file ownership
+chmod
+chown
+setuid
+setgid
+
+Example:
+
+Application requires root privileges.
+
+Typical classification:
+
+HIGH
+
+Also flag this as a security concern.
+
+23. UID/GID Coupling
+
+Example:
+
+Application requires UID=1001 and GID=1001.
+
+If controlled by the application/container:
+
+MEDIUM
+
+If it must match the host OS:
+
+HIGH
+
+24. OS Security Coupling
+
+Detect:
+
+SELinux
+AppArmor
+Windows Security Policies
+Linux capabilities
+Seccomp
+OS-specific ACLs
+
+Example:
+
+Application requires a specific SELinux context.
+
+Typical classification:
+
+HIGH
+
+25. Kernel Coupling
+
+Containers share the host kernel.
+
+Detect:
+
+Linux syscalls
+ioctl
+kernel modules
+eBPF
+/dev/*
+/proc/*
+/sys/*
+kernel-specific networking
+kernel-specific behavior
+
+Typical classification:
+
+HIGH
+
+If hardware/kernel-specific:
+
+CRITICAL
+
+26. Container Host Coupling
+
+Inspect Kubernetes/container configuration for:
+
+hostPath:
+hostNetwork: true
+hostPID: true
+hostIPC: true
+privileged: true
+
+Also inspect:
+
+/dev/*
+/var/run/docker.sock
+
+Typical classifications:
+
+Dependency
+
+Classification
+
+hostPath
+
+HIGH
+
+hostNetwork
+
+HIGH
+
+hostPID
+
+HIGH
+
+hostIPC
+
+HIGH
+
+privileged
+
+HIGH
+
+Host device
+
+HIGH/CRITICAL
+
+Docker socket
+
+CRITICAL
+
+27. Hardware Coupling
+
+Detect dependencies on:
+
+GPU
+
+FPGA
+
+HSM
+
+Special NIC
+
+PCI devices
+
+Device drivers
+
+Host devices
+
+Example:
+
+Container
+    ↓
+/dev/nvidia0
+    ↓
+GPU driver
+    ↓
+Host kernel
+
+Typical classification:
+
+HIGH/CRITICAL
+
+28. OS Networking Coupling
+
+Detect direct use of:
+
+iptables
+ip
+ifconfig
+route
+network namespaces
+Linux network interfaces
+Windows networking APIs
+
+Example:
+
+Application executes:
+
+iptables -A ...
+
+Classification:
+
+HIGH
+
+Standard:
+
+TCP
+UDP
+HTTP
+HTTPS
+socket APIs
+
+are not automatically OS coupling.
+
+Typical classification:
+
+LOW
+
+29. OS Environment Variables
+
+Standard variables:
+
+PATH
+HOME
+USER
+TMPDIR
+
+Typical:
+
+LOW
+
+OS-specific variables:
+
+LD_LIBRARY_PATH
+WINDIR
+APPDATA
+
+Typical:
+
+MEDIUM
+
+If critical to application operation:
+
+HIGH
+
+30. OS Scheduling Coupling
+
+Detect:
+
+cron
+systemd timers
+Windows Task Scheduler
+at
+nice
+renice
+CPU affinity
+OS scheduler behavior
+
+If application configures the OS scheduler:
+
+HIGH
+
+If scheduling exists only in infrastructure/deployment:
+
+Application OS Coupling = LOW
+Infrastructure Coupling = MEDIUM
+
+31. CPU Architecture Coupling
+
+Detect:
+
+x86
+x86_64
+AMD64
+ARM
+ARM64
+AArch64
+PowerPC
+SPARC
+
+Native binaries compiled for a single architecture create platform coupling.
+
+Typical:
+
+MEDIUM/HIGH
+
+If the application only provides x86_64 native binaries and cannot run on ARM:
+
+HIGH
+
+32. Serverless Applications
+
+For serverless applications:
+
+Application
+    ↓
+Managed Runtime
+    ↓
+Cloud Provider
+
+The host OS is largely abstracted.
+
+Do not report host OS coupling merely because the provider internally uses Linux.
+
+Assess instead:
+
+Runtime version
+
+Native libraries
+
+Runtime-specific APIs
+
+/tmp behavior
+
+CPU architecture
+
+Supported binaries
+
+33. VM-Based Applications
+
+For VM applications:
+
+Application
+    ↓
+Guest OS
+    ↓
+VM
+    ↓
+Hypervisor
+
+The guest OS is part of the application execution environment.
+
+Assess:
+
+OS packages
+
+Native libraries
+
+systemd
+
+Windows services
+
+OS APIs
+
+Filesystem
+
+Permissions
+
+Kernel dependencies
+
+OS version
+
+34. Bare-Metal Applications
+
+Assess:
+
+OS APIs
+
+Kernel
+
+Drivers
+
+Devices
+
+Filesystem
+
+Native libraries
+
+CPU architecture
+
+Network interfaces
+
+Hardware-specific dependencies
+
+Hardware-specific dependencies are usually:
+
+HIGH/CRITICAL
+
+35. Legacy Applications
+
+Legacy applications often contain implicit OS dependencies.
+
+Inspect:
+
+Shell scripts
+
+Hardcoded paths
+
+Native libraries
+
+OS commands
+
+OS services
+
+Fixed UID/GID
+
+OS configuration
+
+Shared filesystem
+
+Cron
+
+Batch scripts
+
+Startup scripts
+
+Vendor binaries
+
+36. Repository Evidence Sources
+
+Inspect all available repositories and artifacts.
+
+Source Code
+
+Languages may include:
+
+Java
+
+Python
+
+C
+
+C++
+
+C#
+
+Go
+
+Rust
+
+Node.js
+
+Shell
+
+PowerShell
+
+Look for:
+
+Filesystem APIs
+
+OS commands
+
+Native libraries
+
+System calls
+
+Environment variables
+
+Process management
+
+OS-specific APIs
+
+Docker / Container
+
+Inspect:
+
+Dockerfile
+Containerfile
+docker-compose.yml
+
+Look for:
+
+FROM
+RUN
+USER
+COPY
+ENTRYPOINT
+CMD
+VOLUME
+
+Kubernetes
+
+Inspect:
+
+Deployment
+StatefulSet
+DaemonSet
+Job
+CronJob
+Pod
+Helm
+
+Look for:
+
+hostPath
+hostNetwork
+hostPID
+hostIPC
+privileged
+capabilities
+securityContext
+volumeMounts
+devices
+
+ECS
+
+Inspect:
+
+Task Definition
+Container Definition
+Volumes
+Mount Points
+LinuxParameters
+Privileged
+ReadonlyRootFilesystem
+
+Infrastructure
+
+Inspect:
+
+Terraform
+CloudFormation
+CDK
+Ansible
+Helm
+
+Deployment
+
+Inspect:
+
+Jenkins
+GitHub Actions
+GitLab
+Control-M
+Shell
+PowerShell
+Ansible
+
+37. Application vs Infrastructure Coupling
+
+The agent must distinguish:
+
+Application OS Coupling
+
+from:
+
+Infrastructure OS Coupling
+
+Example:
+
+Deployment script:
+
+yum install package-x
+
+This may be infrastructure coupling rather than application runtime coupling.
+
+Example:
+
+Application:
+
+subprocess.run(["yum", "install", "package-x"])
+
+This is application OS coupling.
+
+38. Intentional OS Coupling
+
+OS coupling is not automatically an architecture violation.
+
+Example:
+
+Application
+    ↓
+RHEL
+
+may be acceptable when:
+
+RHEL is an enterprise standard
+
+Application is certified for supported RHEL versions
+
+OS upgrades are tested
+
+No unsupported OS internals are used
+
+Dependency is documented
+
+Upgrade path exists
+
+Report:
+
+Intentional / Acceptable OS Coupling
+
+when appropriate.
+
+39. Architecture Exception
+
+If an approved exception exists, report it.
+
+Example:
+
+Exception ID:
+ARCH-EX-1234
+
+Dependency:
+Linux native library
+
+Reason:
+Required for hardware acceleration
+
+Owner:
+Architecture
+
+Expiry:
+2027-12-31
+
+Status:
+Approved
+
+Finding:
+
+OS Coupling = HIGH
+Exception = ARCH-EX-1234
+Exception Status = APPROVED
+
+Do not treat an approved exception as an unapproved violation.
+
+40. Severity Model
+
+LOW
+
+Portable dependency. OS change normally does not require application changes.
+
+Examples:
+
+Standard filesystem APIs
+
+Container-internal paths
+
+Standard sockets
+
+Standard runtime APIs
+
+Platform-managed configuration
+
+MEDIUM
+
+OS change may require configuration, runtime, deployment, or compatibility changes.
+
+Examples:
+
+Specific runtime version
+
+Specific OS package
+
+Hardcoded application path
+
+Native library with documented compatibility
+
+OS-specific environment variable
+
+HIGH
+
+Application strongly depends on OS implementation or behavior.
+
+Examples:
+
+Host filesystem
+
+OS-specific API
+
+OS-specific command
+
+systemd dependency
+
+Specific ABI
+
+Kubernetes hostPath
+
+OS-specific security policy
+
+OS-specific native library
+
+CRITICAL
+
+Application fundamentally depends on kernel, hardware, privileged host access, or low-level platform behavior.
+
+Examples:
+
+Kernel module
+
+Host device
+
+Docker socket
+
+Kernel-specific behavior
+
+Privileged host access
+
+41. Coupling Score
+
+Use the score as an aid, not as a replacement for architectural reasoning.
+
+Indicator
+
+Score
+
+Standard portable API
+
+0
+
+Container-internal filesystem
+
+0
+
+Platform-managed configuration
+
+0
+
+Hardcoded path
+
+1
+
+Specific runtime dependency
+
+1
+
+Specific OS package
+
+2
+
+Native library
+
+2
+
+OS-specific environment variable
+
+2
+
+OS-specific API
+
+3
+
+OS-specific command
+
+3
+
+Host filesystem
+
+4
+
+hostPath
+
+4
+
+OS service dependency
+
+4
+
+Kernel dependency
+
+5
+
+Host device
+
+5
+
+Kernel module
+
+5
+
+Privileged host dependency
+
+5
+
+Suggested interpretation:
+
+0-1 = LOW
+2-3 = MEDIUM
+4   = HIGH
+5+  = CRITICAL
+
+The score must not override explicit evidence.
+
+42. OS Upgrade Impact
+
+Assess impact of:
+
+OS patch
+
+OS minor upgrade
+
+OS major upgrade
+
+OS migration
+
+OS replacement
+
+Kernel upgrade
+
+Container base-image upgrade
+
+Runtime upgrade
+
+CPU architecture change
+
+Example:
+
+Current:
+RHEL 8
+
+Target:
+RHEL 9
+
+Application:
+Native C++ library
+
+OS Coupling:
+HIGH
+
+Upgrade Risk:
+HIGH
+
+43. Upgrade Risk Matrix
+
+Coupling
+
+Upgrade Impact
+
+Typical Action
+
+LOW
+
+No application change normally expected
+
+Standard compatibility testing
+
+MEDIUM
+
+Configuration/runtime/deployment changes possible
+
+Compatibility testing
+
+HIGH
+
+Application/native dependency changes likely
+
+Remediation + regression testing
+
+CRITICAL
+
+Fundamental platform/kernel/hardware dependency
+
+Architecture remediation
+
+44. Remediation Patterns
+
+Remove OS Command Dependency
+
+Avoid:
+
+Application
+    ↓
+systemctl
+
+Prefer:
+
+Application
+    ↓
+Health / Readiness Interface
+    ↓
+Deployment Platform
+
+Externalize Configuration
+
+Avoid:
+
+Application
+    ↓
+Hardcoded OS path
+
+Prefer:
+
+Configuration Provider
+    ↓
+Application
+
+Remove Host Filesystem Dependency
+
+Avoid:
+
+Application
+    ↓
+Host /var/lib/myapp
+
+Prefer:
+
+Application
+    ↓
+Platform-managed storage
+
+Reduce Native Dependency
+
+Where possible:
+
+Use portable runtime APIs
+
+Document native library requirements
+
+Document supported OS versions
+
+Document ABI requirements
+
+Pin supported versions
+
+Test OS upgrades
+
+Maintain a compatibility matrix
+
+Remove Root Dependency
+
+Avoid:
+
+Application
+    ↓
+root
+
+Prefer:
+
+Application
+    ↓
+Dedicated service identity
+    ↓
+Least privilege
+
+45. False Positive Prevention
+
+The agent MUST NOT report OS coupling solely because it finds:
+
+/etc
+/var
+/opt
+/tmp
+/app
+/data
+Linux
+Ubuntu
+RHEL
+Windows
+Docker
+Kubernetes
+Java
+Python
+
+Contextual analysis is mandatory.
+
+46. Evidence Rules
+
+The agent must distinguish between:
+
+Observed Evidence
+
+and:
+
+Inference
+
+Example:
+
+Observed:
+Application reads /etc/myapp/config.
+
+Observed:
+Dockerfile creates /etc/myapp/config.
+
+Inference:
+The path is container-internal.
+
+Conclusion:
+Host OS coupling = LOW.
+
+Do not state HIGH OS coupling unless evidence establishes that the dependency belongs to the host OS or relies on OS-specific behavior.
+
+47. Confidence
+
+HIGH
+
+Use HIGH when:
+
+Direct source-code evidence exists
+
+Configuration explicitly establishes the dependency
+
+Multiple repositories corroborate the dependency
+
+Runtime configuration confirms the dependency
+
+Host/OS boundary is explicit
+
+MEDIUM
+
+Use MEDIUM when:
+
+Dependency is strongly indicated
+
+Only one evidence source exists
+
+Runtime context is incomplete
+
+Dependency ownership is unclear
+
+LOW
+
+Use LOW when:
+
+Dependency is inferred
+
+Evidence is incomplete
+
+OS ownership cannot be established
+
+Repository context is missing
+
+When evidence is insufficient:
+
+Status = REQUIRES_VALIDATION
+
+Do not convert an inference into a fact.
+
+48. Finding Output Contract
+
+Every finding should contain:
+
+Finding ID:
+Application:
+Component:
+Repositories:
+Execution Model:
+Current OS:
+Coupling Type:
+Severity:
+Evidence:
+Dependency:
+Dependency Owner:
+Boundary:
+Why It Is Coupling:
+OS Upgrade Impact:
+Recommendation:
+Exception:
+Confidence:
+Status:
+
+Example:
+
+Finding ID:
+OS-001
+
+Application:
+Payments
+
+Component:
+Payment API
+
+Repositories:
+payment-api
+payment-deployment
+
+Execution Model:
+Kubernetes
+
+Coupling Type:
+Host Filesystem
+
+Severity:
+HIGH
+
+Evidence:
+
+Repository:
+payment-deployment
+
+File:
+deployment.yaml
+
+Configuration:
+hostPath:
+  path: /etc/payment
+
+Dependency:
+Host filesystem directory
+
+Dependency Owner:
+Host OS
+
+Boundary:
+Application
+    ↓
+Container
+    ↓
+Host Filesystem
+    ↓
+Host OS
+
+Why It Is Coupling:
+The application indirectly depends on the host OS filesystem layout.
+An OS migration or node configuration change may remove the path,
+change permissions, or alter security context.
+
+OS Upgrade Impact:
+HIGH
+
+Recommendation:
+Replace hostPath with an approved platform-managed configuration
+mechanism such as ConfigMap, Secret, or external configuration service.
+
+Confidence:
+HIGH
+
+Status:
+OPEN
+
+49. Decision Tree
+
+Identify application component
+        ↓
+Identify execution model
+        ↓
+Identify repositories
+        ↓
+Detect potential OS dependency
+        ↓
+Is it OS-specific?
+        |
+        +-- NO → No OS coupling
+        |
+        +-- YES
+              ↓
+       Identify dependency owner
+              ↓
+       Identify boundary
+              ↓
+       Is it containerized?
+          |
+          +-- YES
+          |    ↓
+          |  Check:
+          |  - Container userspace
+          |  - Host filesystem
+          |  - Host kernel
+          |  - Host network
+          |  - Host PID
+          |  - Host IPC
+          |  - Host devices
+          |  - Native libraries
+          |
+          +-- NO
+               ↓
+             Check:
+             - Host OS
+             - Filesystem
+             - APIs
+             - Commands
+             - Services
+             - Packages
+             - Security
+             - Kernel
+             - Hardware
+        ↓
+Assess OS upgrade impact
+        ↓
+Determine severity
+        ↓
+Check approved exception
+        ↓
+Determine confidence
+        ↓
+Generate finding and remediation
+
+50. Quick Classification Reference
+
+Dependency
+
+Typical Classification
+
+Standard HTTP/TCP
+
+LOW
+
+Standard socket API
+
+LOW
+
+Container-internal /etc
+
+LOW
+
+Container-internal /tmp
+
+LOW
+
+ConfigMap-mounted file
+
+LOW
+
+Hardcoded application path
+
+LOW/MEDIUM
+
+Specific OS package
+
+MEDIUM
+
+Specific runtime version
+
+MEDIUM
+
+Native .so / .dll
+
+MEDIUM/HIGH
+
+OS-specific API
+
+HIGH
+
+OS-specific command
+
+HIGH
+
+Host filesystem
+
+HIGH
+
+Kubernetes hostPath
+
+HIGH
+
+systemd dependency
+
+HIGH
+
+Specific ABI
+
+HIGH
+
+Root dependency
+
+HIGH
+
+SELinux/AppArmor dependency
+
+HIGH
+
+Host network
+
+HIGH
+
+Host PID
+
+HIGH
+
+Host device
+
+HIGH/CRITICAL
+
+Kernel module
+
+CRITICAL
+
+/var/run/docker.sock
+
+CRITICAL
+
+Direct /proc, /sys, /dev dependency
+
+HIGH
+
+Kernel-specific syscall
+
+HIGH/CRITICAL
+
+Hardware-specific dependency
+
+HIGH/CRITICAL
+
+Serverless host OS dependency
+
+Usually LOW / abstracted
+
+VM guest OS dependency
+
+MEDIUM/HIGH
+
+Bare-metal OS dependency
+
+HIGH/CRITICAL
+
+51. Golden Rule
+
+Never classify OS coupling based solely on a path, technology, programming language, container, or operating system name.
+
+The agent must establish:
+
+Dependency
+    ↓
+Owner
+    ↓
+Boundary
+    ↓
+OS Specificity
+    ↓
+Change Impact
+    ↓
+Severity
+
+The final assessment must answer:
+
+What OS coupling exists, where does it exist, why does it matter, what could break during an OS change, and how can the coupling be removed or reduced?
+
+52. Agent Instruction
+
+When performing an OS Coupling Assessment:
+
+Identify every deployable application component.
+
+Identify the execution model for each component.
+
+Identify all relevant repositories.
+
+Inspect source code.
+
+Inspect Dockerfiles/container definitions.
+
+Inspect Kubernetes/ECS manifests where applicable.
+
+Inspect infrastructure configuration.
+
+Inspect deployment configuration.
+
+Detect potential OS dependencies.
+
+Correlate evidence across repositories.
+
+Determine whether a dependency is container-internal or host-level.
+
+Determine dependency ownership.
+
+Determine whether the dependency is OS-specific.
+
+Assess OS upgrade impact.
+
+Assign severity.
+
+Assign confidence.
+
+Check architecture exceptions.
+
+Provide remediation.
+
+Clearly distinguish observed evidence from inference.
+
+If evidence is insufficient, report REQUIRES_VALIDATION.
+
+The assessment must prefer evidence over inference.
